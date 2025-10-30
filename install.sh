@@ -9,6 +9,24 @@ fi
 # Get the directory where the script is located
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
+# Check for required files to ensure the script is run correctly
+REQUIRED_FILES=(
+    "$SCRIPT_DIR/YSFReflector"
+    "$SCRIPT_DIR/requirements.txt"
+    "$SCRIPT_DIR/YSFReflector.ini"
+    "$SCRIPT_DIR/systemd/YSFReflector.service"
+    "$SCRIPT_DIR/logrotate.d/YSFReflector"
+)
+
+for f in "${REQUIRED_FILES[@]}"; do
+    if [ ! -f "$f" ] && [ ! -d "$f" ]; then
+        echo "Error: Required file or directory not found: $f"
+        echo "Please ensure you are running this script from the root of the pYSFReflector repository."
+        echo "Alternatively, the script may have been run in a way that prevents it from finding its files (e.g., by piping it to bash)."
+        exit 1
+    fi
+done
+
 # Check if pip is installed, and if not, install it
 if ! command -v pip &> /dev/null; then
   echo "pip not found. Installing python3-pip..."
