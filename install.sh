@@ -6,6 +6,126 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# --- Management Functions ---
+show_menu() {
+    echo "YSFReflector Management Menu"
+    echo "--------------------------"
+    echo "1. View Reflector Status"
+    echo "2. Stop Reflector"
+    echo "3. Restart Reflector"
+    echo "4. View Blocked List"
+    echo "5. Add to Blocked List"
+    echo "6. Remove from Blocked List"
+    echo "7. Uninstall Reflector"
+    echo "8. Exit"
+    echo "--------------------------"
+}
+
+view_blocked_list() {
+    echo "--- Blocked List ---"
+    if [ -f "/opt/YSFReflector/deny.db" ]; then
+        cat "/opt/YSFReflector/deny.db"
+    else
+        echo "Blocklist file not found."
+    fi
+    echo "--------------------"
+}
+
+add_to_blocked_list() {
+    read -p "Enter the entry to add: " entry
+    echo "$entry" >> "/opt/YSFReflector/deny.db"
+    echo "Entry added to the blocked list."
+}
+
+remove_from_blocked_list() {
+    read -p "Enter the entry to remove: " entry
+    if [ -f "/opt/YSFReflector/deny.db" ]; then
+        sed -i "/^$entry$/d" "/opt/YSFReflector/deny.db"
+        echo "Entry removed from the blocked list."
+    else
+        echo "Blocklist file not found."
+    fi
+}
+
+uninstall_reflector() {
+    echo "This will permanently remove YSFReflector and all associated files."
+    read -p "Are you sure you want to continue? (y/n): " confirm1
+    if [ "$confirm1" != "y" ]; then
+        echo "Uninstall cancelled."
+        return
+    fi
+
+    read -p "This action cannot be undone. Please confirm one last time. (y/n): " confirm2
+    if [ "$confirm2" != "y" ]; then
+        echo "Uninstall cancelled."
+        return
+    fi
+
+    echo "Stopping and disabling the YSFReflector service..."
+    systemctl stop YSFReflector.service
+    systemctl disable YSFReflector.service
+
+    echo "Removing application files and directories..."
+    rm -f /etc/systemd/system/YSFReflector.service
+    rm -f /etc/logrotate.d/YSFReflector
+    rm -rf /opt/YSFReflector
+    rm -rf /etc/ysfreflector
+    rm -rf /var/log/ysfreflector
+
+    echo "Reloading systemd daemon..."
+    systemctl daemon-reload
+
+    echo "Removing the ysfreflector user..."
+    userdel -r ysfreflector
+
+    echo "YSFReflector has been successfully uninstalled."
+}
+
+# --- Main Script ---
+
+# Check if the reflector is already installed
+if [ -f "/opt/YSFReflector/YSFReflector" ]; then
+  while true; do
+    show_menu
+    read -p "Enter your choice [1-8]: " choice
+    case $choice in
+      1)
+        echo "Viewing status..."
+        systemctl status YSFReflector.service
+        ;;
+      2)
+        echo "Stopping reflector..."
+        systemctl stop YSFReflector.service
+        ;;
+      3)
+        echo "Restarting reflector..."
+        systemctl restart YSFReflector.service
+        ;;
+      4)
+        view_blocked_list
+        ;;
+      5)
+        add_to_blocked_list
+        ;;
+      6)
+        remove_from_blocked_list
+        ;;
+      7)
+        uninstall_reflector
+        exit 0
+        ;;
+      8)
+        break
+        ;;
+      *)
+        echo "Invalid choice. Please enter a number between 1 and 8."
+        ;;
+    esac
+    echo ""
+  done
+  exit 0
+fi
+
 # Get the directory where the script is located
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
