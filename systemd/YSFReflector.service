@@ -5,11 +5,10 @@ After=network.target
 [Service]
 ExecStartPre=/bin/sleep 1
 Type=simple
-User=mmdvm
-Group=mmdvm
+User=ysfreflector
+Group=ysfreflector
 Restart=always
-# Modify for different location of Python3 or location of files
-ExecStart=/usr/bin/python3 /usr/local/bin/YSFReflector /etc/YSFReflector/YSFReflector.ini
+ExecStart=/usr/bin/python3 /opt/YSFReflector/YSFReflector /etc/ysfreflector/YSFReflector.ini
 
 [Install]
 WantedBy=multi-user.target
