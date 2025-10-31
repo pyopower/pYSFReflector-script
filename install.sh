@@ -6,6 +6,15 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# --- Staging Area ---
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+STAGING_DIR="/tmp/pYSFReflector-install"
+
+rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+cp -r "$SCRIPT_DIR"/* "$STAGING_DIR"/
+cd "$STAGING_DIR"
+
 # --- Management Functions ---
 show_menu() {
     echo "YSFReflector Management Menu"
@@ -130,15 +139,6 @@ EOL
     systemctl start logtailer.service
     systemctl enable wysf-dashboard.service
     systemctl start wysf-dashboard.service
-
-    echo "WSYSFDash has been successfully installed."
-    echo "-----------------------------------------------------"
-    echo "Firewall Configuration:"
-    echo "Please ensure the following ports are open in your firewall:"
-    echo "- Reflector Port: $reflector_port (UDP)"
-    echo "- Dashboard Web Port: $web_port (TCP)"
-    echo "- Dashboard Websocket Port: $ws_port (TCP)"
-    echo "-----------------------------------------------------"
 }
 
 # --- Main Script ---
@@ -177,16 +177,13 @@ if [ -f "/opt/YSFReflector/YSFReflector" ]; then
   exit 0
 fi
 
-# Get the directory where the script is located
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-
 # Check for required files to ensure the script is run correctly
 REQUIRED_FILES=(
-    "$SCRIPT_DIR/YSFReflector"
-    "$SCRIPT_DIR/requirements.txt"
-    "$SCRIPT_DIR/YSFReflector.ini"
-    "$SCRIPT_DIR/systemd/YSFReflector.service"
-    "$SCRIPT_DIR/logrotate.d/YSFReflector"
+    "YSFReflector"
+    "requirements.txt"
+    "YSFReflector.ini"
+    "systemd/YSFReflector.service"
+    "logrotate.d/YSFReflector"
 )
 
 for f in "${REQUIRED_FILES[@]}"; do
@@ -205,7 +202,7 @@ if ! command -v pip &> /dev/null; then
 fi
 
 echo "Installing dependencies..."
-if ! python3 -m pip install --break-system-packages -r "$SCRIPT_DIR/requirements.txt"; then
+if ! python3 -m pip install --break-system-packages -r "requirements.txt"; then
   echo "Failed to install dependencies." >&2
   exit 1
 fi
@@ -222,13 +219,20 @@ mkdir -p /var/log/ysfreflector
 mkdir -p /etc/ysfreflector
 
 # Copy files
-cp "$SCRIPT_DIR/YSFReflector" /opt/YSFReflector/
-cp "$SCRIPT_DIR/YSFReflector.ini" /etc/ysfreflector/
+cp "YSFReflector" /opt/YSFReflector/
+cp "YSFReflector.ini" /etc/ysfreflector/
 
 # Set permissions
 chown -R ysfreflector:ysfreflector /opt/YSFReflector
 chown -R ysfreflector:ysfreflector /var/log/ysfreflector
 chown -R ysfreflector:ysfreflector /etc/ysfreflector
+
+# Verify permissions
+if [ ! -r "/opt/YSFReflector/YSFReflector" ]; then
+    echo "Error: /opt/YSFReflector/YSFReflector is not readable."
+    exit 1
+fi
+
 
 echo "Starting interactive configuration..."
 read -p "Enter reflector name: " reflector_name
@@ -243,8 +247,8 @@ sed -i "s#Port=.*#Port=$reflector_port#" /etc/ysfreflector/YSFReflector.ini
 sed -i "s#FileRotate=.*#FileRotate=0#" /etc/ysfreflector/YSFReflector.ini
 
 # Copy service and logrotate files
-cp "$SCRIPT_DIR/systemd/YSFReflector.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/logrotate.d/YSFReflector" /etc/logrotate.d/
+cp "systemd/YSFReflector.service" /etc/systemd/system/
+cp "logrotate.d/YSFReflector" /etc/logrotate.d/
 
 # Reload systemd, enable and start the service
 systemctl daemon-reload
