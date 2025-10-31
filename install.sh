@@ -97,6 +97,20 @@ install_dashboard() {
 EOL
     chown www-data:www-data /var/www/html/ysf-dashboard/config/config.php
 
+    # Create redirect
+    cat > /var/www/html/index.html << EOL
+<!DOCTYPE html>
+<html>
+<head>
+<title>YSFReflector Dashboard</title>
+<meta http-equiv="refresh" content="0; url=/ysf-dashboard" />
+</head>
+<body>
+<p>Redirecting to the <a href="/ysf-dashboard">YSFReflector Dashboard</a>.</p>
+</body>
+</html>
+EOL
+
     # Restart Apache
     systemctl restart apache2
 }
@@ -231,3 +245,7 @@ if [ "$install_dashboard_choice" == "y" ]; then
     echo "- Dashboard Port: 80 (TCP)"
 fi
 echo "-----------------------------------------------------"
+
+if [ "$install_dashboard_choice" == "y" ]; then
+    echo "You can access the dashboard at http://<your_server_ip>/ysf-dashboard"
+fi
