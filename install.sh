@@ -97,6 +97,7 @@ install_dashboard() {
     # Configure the dashboard
     sed -i "s|^File = .*|File = /var/log/ysfreflector/YSFReflector.log|" /opt/WSYSFDash/logtailer.ini
     sed -i "s|^Port = .*|Port = $ws_port|" /opt/WSYSFDash/logtailer.ini
+    sed -i "s|^FileRotate = .*|FileRotate = False|" /opt/WSYSFDash/logtailer.ini
     sed -i "s|var WebsocketsPath.*|var WebsocketsPath        = \"/ysfreflector\";|" /opt/WSYSFDash/html/js/config.js
     sed -i "s|var WebsocketsPort.*|var WebsocketsPort      = $ws_port;|" /opt/WSYSFDash/html/js/config.js
 
@@ -228,8 +229,8 @@ chown -R ysfreflector:ysfreflector /var/log/ysfreflector
 chown -R ysfreflector:ysfreflector /etc/ysfreflector
 
 # Verify permissions
-if [ ! -r "/opt/YSFReflector/YSFReflector" ]; then
-    echo "Error: /opt/YSFReflector/YSFReflector is not readable."
+if ! sudo -u ysfreflector [ -r "/opt/YSFReflector/YSFReflector" ]; then
+    echo "Error: /opt/YSFReflector/YSFReflector is not readable by the ysfreflector user."
     exit 1
 fi
 
