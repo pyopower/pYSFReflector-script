@@ -124,8 +124,22 @@ install_dashboard() {
     sed -i "s|var WebsocketsPort.*|var WebsocketsPort      = $ws_port;|" /opt/WSYSFDash/html/js/config.js
 
     # Set up systemd services
-    cp /opt/WSYSFDash/systemd/logtailer.service /etc/systemd/system/
-    sed -i "s/User=pi/User=ysfreflector/" /etc/systemd/system/logtailer.service
+    cat > /etc/systemd/system/logtailer.service << EOL
+[Unit]
+Description=Python3 logtailer for WSYSFDash
+After=network.target
+
+[Service]
+Type=simple
+User=ysfreflector
+Group=ysfreflector
+Restart=always
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/python3 /opt/WSYSFDash/logtailer.py
+
+[Install]
+WantedBy=multi-user.target
+EOL
 
     # Configure Apache
     cat > /etc/apache2/sites-available/wysf-dashboard.conf << EOL
