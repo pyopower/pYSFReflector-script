@@ -6,6 +6,177 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# --- Management Functions ---
+show_menu() {
+    echo "YSFReflector Management Menu"
+    echo "--------------------------"
+    echo "1. View Reflector Status"
+    echo "2. Stop Reflector"
+    echo "3. Restart Reflector"
+    echo "4. Uninstall Reflector"
+    echo "5. Exit"
+    echo "--------------------------"
+}
+
+uninstall_reflector() {
+    echo "This will permanently remove YSFReflector and all associated files."
+    read -p "Are you sure you want to continue? (y/n): " confirm1
+    if [ "$confirm1" != "y" ]; then
+        echo "Uninstall cancelled."
+        return
+    fi
+
+    read -p "This action cannot be undone. Please confirm one last time. (y/n): " confirm2
+    if [ "$confirm2" != "y" ]; then
+        echo "Uninstall cancelled."
+        return
+    fi
+
+    echo "Stopping and disabling services..."
+    systemctl stop YSFReflector.service || true
+    systemctl disable YSFReflector.service || true
+    systemctl stop logtailer.service || true
+    systemctl disable logtailer.service || true
+    systemctl stop wysf-dashboard.service || true
+    systemctl disable wysf-dashboard.service || true
+
+    echo "Removing application files and directories..."
+    rm -f /etc/systemd/system/YSFReflector.service
+    rm -f /etc/systemd/system/logtailer.service
+    rm -f /etc/systemd/system/wysf-dashboard.service
+    rm -f /etc/logrotate.d/YSFReflector
+    rm -rf /opt/YSFReflector
+    rm -rf /etc/ysfreflector
+    rm -rf /var/log/ysfreflector
+    rm -rf /opt/WSYSFDash
+
+    echo "Reloading systemd daemon..."
+    systemctl daemon-reload
+
+    echo "Removing the ysfreflector user..."
+    userdel -r ysfreflector || true
+
+    echo "YSFReflector and all associated components have been successfully uninstalled."
+}
+
+# --- Dashboard Installation ---
+install_dashboard() {
+    set -e # Exit immediately if a command fails
+
+    echo "Installing WSYSFDash..."
+
+    # Get dashboard ports from the user
+    read -p "Enter the dashboard web service port [8080]: " web_port
+    web_port=${web_port:-8080}
+    read -p "Enter the dashboard websocket port [5678]: " ws_port
+    ws_port=${ws_port:-5678}
+
+    # Install dependencies
+    apt-get update
+    apt-get install -y python3-websockets python3-psutil git
+    pip install --break-system-packages ansi2html
+
+    # Clone the repository
+    rm -rf /tmp/WSYSFDash
+    git clone --recurse-submodules -j8 https://github.com/dg9vh/WSYSFDash /tmp/WSYSFDash
+
+    # Create directories and copy files
+    mkdir -p /opt/WSYSFDash
+    cp -r /tmp/WSYSFDash/* /opt/WSYSFDash/
+    chown -R ysfreflector:ysfreflector /opt/WSYSFDash
+
+    # Configure the dashboard
+    sed -i "s|^File = .*|File = /var/log/ysfreflector/YSFReflector.log|" /opt/WSYSFDash/logtailer.ini
+    sed -i "s|^Port = .*|Port = $ws_port|" /opt/WSYSFDash/logtailer.ini
+    sed -i "s|var WebsocketsPath.*|var WebsocketsPath        = \"/ysfreflector\";|" /opt/WSYSFDash/html/js/config.js
+    sed -i "s|var WebsocketsPort.*|var WebsocketsPort      = $ws_port;|" /opt/WSYSFDash/html/js/config.js
+
+    # Set up systemd services
+    cat > /etc/systemd/system/logtailer.service << EOL
+[Unit]
+Description=Python3 logtailer for WSYSFDash
+After=network.target
+
+[Service]
+Type=simple
+User=ysfreflector
+Group=ysfreflector
+Restart=always
+ExecStart=/usr/bin/python3 /opt/WSYSFDash/logtailer.py
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    cat > /etc/systemd/system/wysf-dashboard.service << EOL
+[Unit]
+Description=Python3 HTTP Server for WSYSFDash
+After=network.target
+
+[Service]
+Type=simple
+User=ysfreflector
+Group=ysfreflector
+Restart=always
+ExecStart=/usr/bin/python3 -m http.server $web_port --directory /opt/WSYSFDash/html
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    # Enable and start services
+    systemctl daemon-reload
+    systemctl enable logtailer.service
+    systemctl start logtailer.service
+    systemctl enable wysf-dashboard.service
+    systemctl start wysf-dashboard.service
+
+    echo "WSYSFDash has been successfully installed."
+    echo "-----------------------------------------------------"
+    echo "Firewall Configuration:"
+    echo "Please ensure the following ports are open in your firewall:"
+    echo "- Reflector Port: $reflector_port (UDP)"
+    echo "- Dashboard Web Port: $web_port (TCP)"
+    echo "- Dashboard Websocket Port: $ws_port (TCP)"
+    echo "-----------------------------------------------------"
+}
+
+# --- Main Script ---
+
+# Check if the reflector is already installed
+if [ -f "/opt/YSFReflector/YSFReflector" ]; then
+  while true; do
+    show_menu
+    read -p "Enter your choice [1-5]: " choice
+    case $choice in
+      1)
+        echo "Viewing status..."
+        systemctl status YSFReflector.service
+        ;;
+      2)
+        echo "Stopping reflector..."
+        systemctl stop YSFReflector.service
+        ;;
+      3)
+        echo "Restarting reflector..."
+        systemctl restart YSFReflector.service
+        ;;
+      4)
+        uninstall_reflector
+        exit 0
+        ;;
+      5)
+        break
+        ;;
+      *)
+        echo "Invalid choice. Please enter a number between 1 and 5."
+        ;;
+    esac
+    echo ""
+  done
+  exit 0
+fi
+
 # Get the directory where the script is located
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
@@ -81,8 +252,9 @@ systemctl enable YSFReflector.service
 systemctl restart YSFReflector.service
 
 echo "Installation, configuration, and service setup complete."
-echo "-----------------------------------------------------"
-echo "Firewall Configuration:"
-echo "Please ensure the following port is open in your firewall:"
-echo "- Reflector Port: $reflector_port (UDP)"
-echo "-----------------------------------------------------"
+
+# Ask to install the dashboard
+read -p "Do you want to install the WSYSFDash dashboard? (y/n): " install_dashboard_choice
+if [ "$install_dashboard_choice" == "y" ]; then
+  install_dashboard
+fi
