@@ -197,7 +197,14 @@ EOL
     systemctl enable logtailer.service
     systemctl start logtailer.service
 
-    echo "WSYSFDash has been successfully installed. You can access it at http://<your_server_ip>:$web_port"
+    echo "WSYSFDash has been successfully installed."
+    echo "-----------------------------------------------------"
+    echo "Firewall Configuration:"
+    echo "Please ensure the following ports are open in your firewall:"
+    echo "- Reflector Port: $reflector_port (UDP)"
+    echo "- Dashboard Web Port: $web_port (TCP)"
+    echo "- Dashboard Websocket Port: $ws_port (TCP)"
+    echo "-----------------------------------------------------"
 }
 
 # --- Main Script ---
@@ -307,9 +314,9 @@ read -p "Enter reflector port [42395]: " reflector_port
 reflector_port=${reflector_port:-42395}
 
 # Update configuration file
-sed -i "s/^Name = .*/Name = $reflector_name/" /etc/ysfreflector/YSFReflector.ini
-sed -i "s/^Description = .*/Description = $reflector_description/" /etc/ysfreflector/YSFReflector.ini
-sed -i "s/^Port = .*/Port = $reflector_port/" /etc/ysfreflector/YSFReflector.ini
+sed -i "s#^Name = .*#Name = $reflector_name#" /etc/ysfreflector/YSFReflector.ini
+sed -i "s#^Description = .*#Description = $reflector_description#" /etc/ysfreflector/YSFReflector.ini
+sed -i "s#^Port = .*#Port = $reflector_port#" /etc/ysfreflector/YSFReflector.ini
 sed -i "s/^FileRotate = .*/FileRotate = 0/" /etc/ysfreflector/YSFReflector.ini
 
 # Copy service and logrotate files
