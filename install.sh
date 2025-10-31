@@ -81,6 +81,44 @@ uninstall_reflector() {
     echo "YSFReflector has been successfully uninstalled."
 }
 
+# --- Dashboard Installation ---
+install_dashboard() {
+    echo "Installing WSYSFDash..."
+
+    # Install dependencies
+    apt-get update
+    apt-get install -y python3-websockets python3-psutil git apache2
+    pip install ansi2html
+
+    # Clone the repository
+    git clone --recurse-submodules -j8 https://github.com/dg9vh/WSYSFDash /tmp/WSYSFDash
+
+    # Create directories and copy files
+    mkdir -p /opt/WSYSFDash
+    cp -r /tmp/WSYSFDash/* /opt/WSYSFDash/
+    chown -R ysfreflector:ysfreflector /opt/WSYSFDash
+
+    # Configure the dashboard
+    sed -i "s|^File = .*|File = /var/log/ysfreflector/YSFReflector.log|" /opt/WSYSFDash/logtailer.ini
+    sed -i "s|var WebsocketsPath.*|var WebsocketsPath        = \"/ysfreflector\";|" /opt/WSYSFDash/html/js/config.js
+
+    # Set up systemd services
+    cp /opt/WSYSFDash/systemd/logtailer.service /etc/systemd/system/
+    sed -i "s/User=pi/User=ysfreflector/" /etc/systemd/system/logtailer.service
+
+    # Configure Apache
+    cp -r /opt/WSYSFDash/html /var/www/html/wysf-dashboard
+    chown -R www-data:www-data /var/www/html/wysf-dashboard
+
+    # Enable and start services
+    systemctl daemon-reload
+    systemctl enable logtailer.service
+    systemctl start logtailer.service
+    systemctl restart apache2
+
+    echo "WSYSFDash has been successfully installed. You can access it at http://<your_server_ip>/wysf-dashboard"
+}
+
 # --- Main Script ---
 
 # Check if the reflector is already installed
@@ -202,3 +240,9 @@ systemctl enable YSFReflector.service
 systemctl start YSFReflector.service
 
 echo "Installation, configuration, and service setup complete."
+
+# Ask to install the dashboard
+read -p "Do you want to install the WSYSFDash dashboard? (y/n): " install_dashboard_choice
+if [ "$install_dashboard_choice" == "y" ]; then
+  install_dashboard
+fi
