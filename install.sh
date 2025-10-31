@@ -83,12 +83,20 @@ uninstall_reflector() {
 
 # --- Dashboard Installation ---
 install_dashboard() {
+    set -e # Exit immediately if a command fails
+
     echo "Installing WSYSFDash..."
+
+    # Get dashboard ports from the user
+    read -p "Enter the dashboard web service port [80]: " web_port
+    web_port=${web_port:-80}
+    read -p "Enter the dashboard websocket port [5678]: " ws_port
+    ws_port=${ws_port:-5678}
 
     # Install dependencies
     apt-get update
     apt-get install -y python3-websockets python3-psutil git apache2
-    pip install ansi2html
+    pip install --break-system-packages ansi2html
 
     # Clone the repository
     git clone --recurse-submodules -j8 https://github.com/dg9vh/WSYSFDash /tmp/WSYSFDash
@@ -100,15 +108,28 @@ install_dashboard() {
 
     # Configure the dashboard
     sed -i "s|^File = .*|File = /var/log/ysfreflector/YSFReflector.log|" /opt/WSYSFDash/logtailer.ini
+    sed -i "s|^Port = .*|Port = $ws_port|" /opt/WSYSFDash/logtailer.ini
     sed -i "s|var WebsocketsPath.*|var WebsocketsPath        = \"/ysfreflector\";|" /opt/WSYSFDash/html/js/config.js
+    sed -i "s|var WebsocketsPort.*|var WebsocketsPort      = $ws_port;|" /opt/WSYSFDash/html/js/config.js
 
     # Set up systemd services
     cp /opt/WSYSFDash/systemd/logtailer.service /etc/systemd/system/
     sed -i "s/User=pi/User=ysfreflector/" /etc/systemd/system/logtailer.service
 
     # Configure Apache
-    cp -r /opt/WSYSFDash/html /var/www/html/wysf-dashboard
-    chown -R www-data:www-data /var/www/html/wysf-dashboard
+    cat > /etc/apache2/sites-available/wysf-dashboard.conf << EOL
+Listen $web_port
+<VirtualHost *:$web_port>
+    DocumentRoot /var/www/html/wysf-dashboard
+    <Directory /var/www/html/wysf-dashboard>
+        AllowOverride All
+        Order allow,deny
+        allow from all
+    </Directory>
+</VirtualHost>
+EOL
+    a2ensite wysf-dashboard
+    a2enmod rewrite
 
     # Enable and start services
     systemctl daemon-reload
@@ -116,7 +137,7 @@ install_dashboard() {
     systemctl start logtailer.service
     systemctl restart apache2
 
-    echo "WSYSFDash has been successfully installed. You can access it at http://<your_server_ip>/wysf-dashboard"
+    echo "WSYSFDash has been successfully installed. You can access it at http://<your_server_ip>:$web_port"
 }
 
 # --- Main Script ---
