@@ -66,24 +66,21 @@ uninstall_reflector() {
     systemctl disable YSFReflector.service
     systemctl stop logtailer.service || true
     systemctl disable logtailer.service || true
+    systemctl stop wysf-dashboard.service || true
+    systemctl disable wysf-dashboard.service || true
 
     echo "Removing application files and directories..."
     rm -f /etc/systemd/system/YSFReflector.service
     rm -f /etc/systemd/system/logtailer.service
+    rm -f /etc/systemd/system/wysf-dashboard.service
     rm -f /etc/logrotate.d/YSFReflector
     rm -rf /opt/YSFReflector
     rm -rf /etc/ysfreflector
     rm -rf /var/log/ysfreflector
     rm -rf /opt/WSYSFDash
-    rm -rf /var/www/html/wysf-dashboard
-    rm -f /etc/apache2/sites-available/wysf-dashboard.conf
 
     echo "Reloading systemd daemon..."
     systemctl daemon-reload
-
-    echo "Disabling Apache site..."
-    a2dissite wysf-dashboard || true
-    systemctl restart apache2
 
     echo "Removing the ysfreflector user..."
     userdel -r ysfreflector
@@ -98,14 +95,14 @@ install_dashboard() {
     echo "Installing WSYSFDash..."
 
     # Get dashboard ports from the user
-    read -p "Enter the dashboard web service port [80]: " web_port
-    web_port=${web_port:-80}
+    read -p "Enter the dashboard web service port [8080]: " web_port
+    web_port=${web_port:-8080}
     read -p "Enter the dashboard websocket port [5678]: " ws_port
     ws_port=${ws_port:-5678}
 
     # Install dependencies
     apt-get update
-    apt-get install -y python3-websockets python3-psutil git apache2
+    apt-get install -y python3-websockets python3-psutil git
     pip install --break-system-packages ansi2html
 
     # Clone the repository
@@ -141,29 +138,28 @@ ExecStart=/usr/bin/python3 /opt/WSYSFDash/logtailer.py
 WantedBy=multi-user.target
 EOL
 
-    # Configure Apache
-    if ! grep -q "Listen $web_port" /etc/apache2/ports.conf; then
-        echo "Listen $web_port" >> /etc/apache2/ports.conf
-    fi
+    cat > /etc/systemd/system/wysf-dashboard.service << EOL
+[Unit]
+Description=Python3 HTTP Server for WSYSFDash
+After=network.target
 
-    cat > /etc/apache2/sites-available/wysf-dashboard.conf << EOL
-<VirtualHost *:$web_port>
-    DocumentRoot /var/www/html/wysf-dashboard
-    <Directory /var/www/html/wysf-dashboard>
-        AllowOverride All
-        Order allow,deny
-        allow from all
-    </Directory>
-</VirtualHost>
+[Service]
+Type=simple
+User=ysfreflector
+Group=ysfreflector
+Restart=always
+ExecStart=/usr/bin/python3 -m http.server $web_port --directory /opt/WSYSFDash/html
+
+[Install]
+WantedBy=multi-user.target
 EOL
-    a2ensite wysf-dashboard
-    a2enmod rewrite
 
     # Enable and start services
     systemctl daemon-reload
     systemctl enable logtailer.service
     systemctl start logtailer.service
-    systemctl restart apache2
+    systemctl enable wysf-dashboard.service
+    systemctl start wysf-dashboard.service
 
     echo "WSYSFDash has been successfully installed. You can access it at http://<your_server_ip>:$web_port"
 }
