@@ -44,20 +44,14 @@ uninstall_reflector() {
     echo "Stopping and disabling services..."
     systemctl stop YSFReflector.service || true
     systemctl disable YSFReflector.service || true
-    systemctl stop logtailer.service || true
-    systemctl disable logtailer.service || true
-    systemctl stop wysf-dashboard.service || true
-    systemctl disable wysf-dashboard.service || true
 
     echo "Removing application files and directories..."
     rm -f /etc/systemd/system/YSFReflector.service
-    rm -f /etc/systemd/system/logtailer.service
-    rm -f /etc/systemd/system/wysf-dashboard.service
     rm -f /etc/logrotate.d/YSFReflector
     rm -rf /opt/YSFReflector
     rm -rf /etc/ysfreflector
     rm -rf /var/log/ysfreflector
-    rm -rf /opt/WSYSFDash
+    rm -rf /var/www/html/ysf-dashboard
 
     echo "Reloading systemd daemon..."
     systemctl daemon-reload
@@ -72,74 +66,39 @@ uninstall_reflector() {
 install_dashboard() {
     set -e # Exit immediately if a command fails
 
-    echo "Installing WSYSFDash..."
-
-    # Get dashboard ports from the user
-    read -p "Enter the dashboard web service port [8080]: " web_port
-    web_port=${web_port:-8080}
-    read -p "Enter the dashboard websocket port [5678]: " ws_port
-    ws_port=${ws_port:-5678}
+    echo "Installing YSFReflector-Dashboard..."
 
     # Install dependencies
     apt-get update
-    apt-get install -y python3-websockets python3-psutil git
-    pip install --break-system-packages ansi2html
+    apt-get install -y apache2 php libapache2-mod-php git
 
     # Clone the repository
-    rm -rf /tmp/WSYSFDash
-    git clone --recurse-submodules -j8 https://github.com/dg9vh/WSYSFDash /tmp/WSYSFDash
+    rm -rf /tmp/YSFReflector-Dashboard
+    git clone https://github.com/dg9vh/YSFReflector-Dashboard.git /tmp/YSFReflector-Dashboard
 
-    # Create directories and copy files
-    mkdir -p /opt/WSYSFDash
-    cp -r /tmp/WSYSFDash/* /opt/WSYSFDash/
-    chown -R ysfreflector:ysfreflector /opt/WSYSFDash
+    # Copy files to webroot
+    mkdir -p /var/www/html/ysf-dashboard
+    cp -r /tmp/YSFReflector-Dashboard/* /var/www/html/ysf-dashboard/
+    chown -R www-data:www-data /var/www/html/ysf-dashboard
 
-    # Configure the dashboard
-    sed -i "s|^File = .*|File = /var/log/ysfreflector/YSFReflector.log|" /opt/WSYSFDash/logtailer.ini
-    sed -i "s|^Port = .*|Port = $ws_port|" /opt/WSYSFDash/logtailer.ini
-    sed -i "s|^FileRotate = .*|FileRotate = False|" /opt/WSYSFDash/logtailer.ini
-    sed -i "s|var WebsocketsPath.*|var WebsocketsPath        = \"/ysfreflector\";|" /opt/WSYSFDash/html/js/config.js
-    sed -i "s|var WebsocketsPort.*|var WebsocketsPort      = $ws_port;|" /opt/WSYSFDash/html/js/config.js
+    # Create config directory
+    mkdir -p /var/www/html/ysf-dashboard/config
+    chown -R www-data:www-data /var/www/html/ysf-dashboard/config
 
-    # Set up systemd services
-    cat > /etc/systemd/system/logtailer.service << EOL
-[Unit]
-Description=Python3 logtailer for WSYSFDash
-After=network.target
-
-[Service]
-Type=simple
-User=ysfreflector
-Group=ysfreflector
-Restart=always
-ExecStart=/usr/bin/python3 /opt/WSYSFDash/logtailer.py
-
-[Install]
-WantedBy=multi-user.target
+    # Create config file
+    cat > /var/www/html/ysf-dashboard/config/config.php << EOL
+<?php
+// Global Config
+\$logLines = 15;
+\$reflectorLogo = "YSF.png";
+\$reflectorLogPath = "/var/log/ysfreflector";
+\$reflectorLogRoot = "YSFReflector";
+?>
 EOL
+    chown www-data:www-data /var/www/html/ysf-dashboard/config/config.php
 
-    cat > /etc/systemd/system/wysf-dashboard.service << EOL
-[Unit]
-Description=Python3 HTTP Server for WSYSFDash
-After=network.target
-
-[Service]
-Type=simple
-User=ysfreflector
-Group=ysfreflector
-Restart=always
-ExecStart=/usr/bin/python3 -m http.server $web_port --directory /opt/WSYSFDash/html
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-    # Enable and start services
-    systemctl daemon-reload
-    systemctl enable logtailer.service
-    systemctl start logtailer.service
-    systemctl enable wysf-dashboard.service
-    systemctl start wysf-dashboard.service
+    # Restart Apache
+    systemctl restart apache2
 }
 
 # --- Main Script ---
@@ -259,7 +218,16 @@ systemctl restart YSFReflector.service
 echo "Installation, configuration, and service setup complete."
 
 # Ask to install the dashboard
-read -p "Do you want to install the WSYSFDash dashboard? (y/n): " install_dashboard_choice
+read -p "Do you want to install the YSFReflector-Dashboard? (y/n): " install_dashboard_choice
 if [ "$install_dashboard_choice" == "y" ]; then
   install_dashboard
 fi
+
+echo "-----------------------------------------------------"
+echo "Firewall Configuration:"
+echo "Please ensure the following port is open in your firewall:"
+echo "- Reflector Port: $reflector_port (UDP)"
+if [ "$install_dashboard_choice" == "y" ]; then
+    echo "- Dashboard Port: 80 (TCP)"
+fi
+echo "-----------------------------------------------------"
