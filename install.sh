@@ -82,6 +82,15 @@ uninstall_reflector() {
     echo "Reloading systemd daemon..."
     systemctl daemon-reload
 
+    # Clean up Apache if it was used
+    if [ -f "/etc/apache2/sites-available/wysf-dashboard.conf" ]; then
+        echo "Disabling Apache site..."
+        a2dissite wysf-dashboard || true
+        rm -f /etc/apache2/sites-available/wysf-dashboard.conf
+        systemctl restart apache2
+    fi
+
+
     echo "Removing the ysfreflector user..."
     userdel -r ysfreflector
 
@@ -138,7 +147,33 @@ ExecStart=/usr/bin/python3 /opt/WSYSFDash/logtailer.py
 WantedBy=multi-user.target
 EOL
 
-    cat > /etc/systemd/system/wysf-dashboard.service << EOL
+    # Check for Apache
+    if systemctl list-units --type=service | grep -q 'apache2'; then
+        echo "Apache detected. Configuring as a virtual host."
+        apt-get install -y apache2
+        cp -r /opt/WSYSFDash/html /var/www/html/wysf-dashboard
+        chown -R www-data:www-data /var/www/html/wysf-dashboard
+
+        if ! grep -q "Listen $web_port" /etc/apache2/ports.conf; then
+            echo "Listen $web_port" >> /etc/apache2/ports.conf
+        fi
+
+        cat > /etc/apache2/sites-available/wysf-dashboard.conf << EOL
+<VirtualHost *:$web_port>
+    DocumentRoot /var/www/html/wysf-dashboard
+    <Directory /var/www/html/wysf-dashboard>
+        AllowOverride All
+        Order allow,deny
+        allow from all
+    </Directory>
+</VirtualHost>
+EOL
+        a2ensite wysf-dashboard
+        a2enmod rewrite
+        systemctl restart apache2
+    else
+        echo "Apache not detected. Using Python's HTTP server."
+        cat > /etc/systemd/system/wysf-dashboard.service << EOL
 [Unit]
 Description=Python3 HTTP Server for WSYSFDash
 After=network.target
@@ -153,13 +188,14 @@ ExecStart=/usr/bin/python3 -m http.server $web_port --directory /opt/WSYSFDash/h
 [Install]
 WantedBy=multi-user.target
 EOL
+        systemctl enable wysf-dashboard.service
+        systemctl start wysf-dashboard.service
+    fi
 
     # Enable and start services
     systemctl daemon-reload
     systemctl enable logtailer.service
     systemctl start logtailer.service
-    systemctl enable wysf-dashboard.service
-    systemctl start wysf-dashboard.service
 
     echo "WSYSFDash has been successfully installed. You can access it at http://<your_server_ip>:$web_port"
 }
@@ -274,6 +310,7 @@ reflector_port=${reflector_port:-42395}
 sed -i "s/^Name = .*/Name = $reflector_name/" /etc/ysfreflector/YSFReflector.ini
 sed -i "s/^Description = .*/Description = $reflector_description/" /etc/ysfreflector/YSFReflector.ini
 sed -i "s/^Port = .*/Port = $reflector_port/" /etc/ysfreflector/YSFReflector.ini
+sed -i "s/^FileRotate = .*/FileRotate = 0/" /etc/ysfreflector/YSFReflector.ini
 
 # Copy service and logrotate files
 cp "$SCRIPT_DIR/systemd/YSFReflector.service" /etc/systemd/system/
