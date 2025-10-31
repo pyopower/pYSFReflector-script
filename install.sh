@@ -142,8 +142,11 @@ WantedBy=multi-user.target
 EOL
 
     # Configure Apache
+    if ! grep -q "Listen $web_port" /etc/apache2/ports.conf; then
+        echo "Listen $web_port" >> /etc/apache2/ports.conf
+    fi
+
     cat > /etc/apache2/sites-available/wysf-dashboard.conf << EOL
-Listen $web_port
 <VirtualHost *:$web_port>
     DocumentRoot /var/www/html/wysf-dashboard
     <Directory /var/www/html/wysf-dashboard>
