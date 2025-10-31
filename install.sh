@@ -61,19 +61,29 @@ uninstall_reflector() {
         return
     fi
 
-    echo "Stopping and disabling the YSFReflector service..."
+    echo "Stopping and disabling services..."
     systemctl stop YSFReflector.service
     systemctl disable YSFReflector.service
+    systemctl stop logtailer.service || true
+    systemctl disable logtailer.service || true
 
     echo "Removing application files and directories..."
     rm -f /etc/systemd/system/YSFReflector.service
+    rm -f /etc/systemd/system/logtailer.service
     rm -f /etc/logrotate.d/YSFReflector
     rm -rf /opt/YSFReflector
     rm -rf /etc/ysfreflector
     rm -rf /var/log/ysfreflector
+    rm -rf /opt/WSYSFDash
+    rm -rf /var/www/html/wysf-dashboard
+    rm -f /etc/apache2/sites-available/wysf-dashboard.conf
 
     echo "Reloading systemd daemon..."
     systemctl daemon-reload
+
+    echo "Disabling Apache site..."
+    a2dissite wysf-dashboard || true
+    systemctl restart apache2
 
     echo "Removing the ysfreflector user..."
     userdel -r ysfreflector
@@ -99,6 +109,7 @@ install_dashboard() {
     pip install --break-system-packages ansi2html
 
     # Clone the repository
+    rm -rf /tmp/WSYSFDash
     git clone --recurse-submodules -j8 https://github.com/dg9vh/WSYSFDash /tmp/WSYSFDash
 
     # Create directories and copy files
