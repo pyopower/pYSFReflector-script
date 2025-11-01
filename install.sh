@@ -30,10 +30,22 @@ detect_arch() {
 
 # Function to install dependencies
 install_dependencies() {
-    echo "Updating package lists..."
-    apt-get update
+    echo "Updating package lists... (ignoring errors from misconfigured repositories)"
+    apt-get update || echo "apt-get update failed, but continuing installation."
+
     echo "Installing dependencies..."
     apt-get install -y python3 python3-pip
+
+    # Verify that dependencies are installed
+    if ! command -v python3 &> /dev/null; then
+        echo "ERROR: python3 could not be installed. Please check your system's package manager configuration."
+        exit 1
+    fi
+    if ! command -v pip3 &> /dev/null; then
+        echo "ERROR: pip3 could not be installed. Please check your system's package manager configuration."
+        exit 1
+    fi
+
     pip3 install -r requirements.txt
 }
 
