@@ -50,6 +50,10 @@ configure_ini() {
     sed -i "s|<reflector name>|$REFLECTOR_NAME|" /etc/YSFReflector.ini
     sed -i "s|<reflector description>|$REFLECTOR_DESC|" /etc/YSFReflector.ini
     sed -i "s|Port=42395|Port=$REFLECTOR_PORT|" /etc/YSFReflector.ini
+    sed -i "s|FilePath=/var/log|FilePath=/var/log/ysfreflector|" /etc/YSFReflector.ini
+
+    # Add a variable to store the port for the firewall warning
+    export REFLECTOR_PORT
 }
 
 # Function to install the application
@@ -86,7 +90,7 @@ setup_services() {
     echo "Enabling YSFReflector service..."
     systemctl enable YSFReflector.service
     echo "Starting YSFReflector service..."
-    systemctl start YSFReflector.service
+    systemctl restart YSFReflector.service
 }
 
 # Main script
@@ -111,3 +115,10 @@ setup_services
 echo "Installation and configuration complete."
 echo "Checking service status..."
 systemctl status YSFReflector.service --no-pager
+
+echo ""
+echo "****************************************************************"
+echo "FIREWALL WARNING"
+echo "****************************************************************"
+echo "Please remember to open port $REFLECTOR_PORT (UDP) in your firewall."
+echo "****************************************************************"
