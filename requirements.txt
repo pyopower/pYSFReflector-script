@@ -2,4 +2,3 @@
 ####### requirements.txt for pYSFReflector #######
 #
 configparser
-datetime

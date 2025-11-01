@@ -825,7 +825,7 @@ def printlog(log_level, mess):
   global debug
   
   if file_rotate == "1":
-    log_file = log_basename + '-' + str(datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d')) + '.log'
+    log_file = log_basename + '-' + str(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')) + '.log'
   else:
     log_file = log_basename + '.log'
   try:
@@ -838,10 +838,10 @@ def printlog(log_level, mess):
     
   if isinstance(log_level, int):
     if file_level <= log_level:
-      str_log = check_string('M: ' + str(datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M:%S.%f'))[:-3] + ' ' + mess)
+      str_log = check_string('M: ' + str(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f'))[:-3] + ' ' + mess)
   else:
     if log_level == "d" and debug == 1:
-      str_log = check_string('D: ' + str(datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M:%S.%f'))[:-3] + ' ' + mess)
+      str_log = check_string('D: ' + str(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f'))[:-3] + ' ' + mess)
   try:
     filelog.write(str_log + '\n') 
     filelog.flush()
@@ -897,7 +897,7 @@ debug = config[13]
 
 ### log
 if file_rotate == "1":
-  log_file = log_basename + '-' + str(datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d')) + '.log'
+  log_file = log_basename + '-' + str(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')) + '.log'
 else:
   log_file = log_basename + '.log'
 try:

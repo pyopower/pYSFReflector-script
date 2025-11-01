@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  ysfreflector:
+    build: .
+    container_name: ysfreflector
+    restart: unless-stopped
+    ports:
+      - "${YSF_PORT:-42395}:42395/udp"
+    volumes:
+      - ./deny.db:/etc/ysfreflector/deny.db
+      - ysfreflector_logs:/var/log/ysfreflector
+    environment:
+      - YSF_NAME=${YSF_NAME:-YSFReflector}
+      - YSF_DESCRIPTION=${YSF_DESCRIPTION:-YSFReflector by IU5JAE}
+      - YSF_PORT=${YSF_PORT:-42395}
+
+volumes:
+  ysfreflector_logs:
