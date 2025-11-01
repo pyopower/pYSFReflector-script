@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Check for root privileges
 if [ "$EUID" -ne 0 ]; then
@@ -29,7 +30,9 @@ detect_arch() {
 
 # Function to install dependencies
 install_dependencies() {
+    echo "Updating package lists..."
     apt-get update
+    echo "Installing dependencies..."
     apt-get install -y python3 python3-pip
     pip3 install -r requirements.txt
 }
@@ -42,7 +45,7 @@ configure_ini() {
     read -p "Enter reflector port [42395]: " REFLECTOR_PORT
     REFLECTOR_PORT=${REFLECTOR_PORT:-42395}
 
-    # Create YSFReflector.ini from template
+    echo "Creating YSFReflector.ini..."
     cp YSFReflector.ini /etc/YSFReflector.ini
     sed -i "s|<reflector name>|$REFLECTOR_NAME|" /etc/YSFReflector.ini
     sed -i "s|<reflector description>|$REFLECTOR_DESC|" /etc/YSFReflector.ini
@@ -51,29 +54,38 @@ configure_ini() {
 
 # Function to install the application
 install_application() {
-    # Create a dedicated user
-    useradd -r -s /bin/false ysfreflector
+    echo "Creating dedicated user 'ysfreflector'..."
+    useradd -r -s /bin/false ysfreflector || echo "User 'ysfreflector' already exists."
 
-    # Copy application files
+    echo "Copying application files..."
     cp YSFReflector /usr/local/bin/YSFReflector
     cp deny.db /usr/local/etc/deny.db
 
-    # Create log directory
+    echo "Creating log directory..."
     mkdir -p /var/log/ysfreflector
     chown ysfreflector:ysfreflector /var/log/ysfreflector
 }
 
 # Function to setup systemd and logrotate
 setup_services() {
-    # Copy systemd service file
-    cp systemd/YSFReflector.service /etc/systemd/system/YSFReflector.service
+    echo "Configuring systemd service..."
+    # Correct the user, group, and config file path in the service file
+    sed -e 's/User=mmdvm/User=ysfreflector/' \
+        -e 's/Group=mmdvm/Group=ysfreflector/' \
+        -e 's|/etc/YSFReflector/YSFReflector.ini|/etc/YSFReflector.ini|' \
+        systemd/YSFReflector.service > /tmp/YSFReflector.service.tmp
 
-    # Copy logrotate config file
+    echo "Copying systemd service file..."
+    cp /tmp/YSFReflector.service.tmp /etc/systemd/system/YSFReflector.service
+
+    echo "Copying logrotate config file..."
     cp logrotate.d/YSFReflector /etc/logrotate.d/YSFReflector
 
-    # Reload systemd and enable the service
+    echo "Reloading systemd daemon..."
     systemctl daemon-reload
+    echo "Enabling YSFReflector service..."
     systemctl enable YSFReflector.service
+    echo "Starting YSFReflector service..."
     systemctl start YSFReflector.service
 }
 
@@ -86,7 +98,6 @@ if [ "$ARCH" == "unsupported" ]; then
 fi
 
 echo "Detected architecture: $ARCH"
-echo "Installing dependencies..."
 install_dependencies
 
 echo "Dependencies installed successfully."
@@ -97,4 +108,6 @@ configure_ini
 
 setup_services
 
-echo "Installation, configuration, and service setup complete."
+echo "Installation and configuration complete."
+echo "Checking service status..."
+systemctl status YSFReflector.service --no-pager
